@@ -1,0 +1,86 @@
+name: Terraform Plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to plan
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: eu-west-2
+  TF_STATE_KEY_PREFIX: fdp-infra-serverless
+  TERRAFORM_VERSION: "1.10.5"
+
+concurrency:
+  group: tf-plan-${{ inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Package Lambda source
+        run: ./scripts/package.sh
+
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: transaction-processor-${{ inputs.environment }}
+          path: build/transaction_processor.zip
+          if-no-files-found: error
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: |
+          terraform init -input=false \
+            -backend-config="key=${TF_STATE_KEY_PREFIX}/${{ inputs.environment }}/terraform.tfstate"
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        run: |
+          set -o pipefail
+          terraform plan -input=false -no-color -lock-timeout=5m \
+            -var="environment=${{ inputs.environment }}" \
+            -out=tfplan | tee plan_output.txt
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### Terraform Plan - \`${{ inputs.environment }}\`"
+            echo '```'
+            tail -c 60000 plan_output.txt 2>/dev/null || echo "(no plan output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
