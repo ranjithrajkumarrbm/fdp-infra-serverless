@@ -42,8 +42,8 @@ locals {
       # Destination DynamoDB table (pre-existing, not managed by this repo).
       transactions_table_name = "fdp-dev-euw2-transactions"
       transactions_table_arn  = "arn:aws:dynamodb:eu-west-2:861477414666:table/fdp-dev-euw2-transactions"
-      table_partition_key     = "transaction_id"
-      table_sort_key          = ""
+      table_partition_key     = "transactionId" # HASH key on the table
+      table_sort_key          = "customerId"    # RANGE key on the table
 
       # Kinesis source stream.
       kinesis_stream_mode     = "PROVISIONED"
@@ -78,8 +78,8 @@ locals {
 
       transactions_table_name = "fdp-prod-euw2-transactions"
       transactions_table_arn  = "arn:aws:dynamodb:eu-west-2:861477414666:table/fdp-prod-euw2-transactions"
-      table_partition_key     = "transaction_id"
-      table_sort_key          = ""
+      table_partition_key     = "transactionId" # HASH key on the table
+      table_sort_key          = "customerId"    # RANGE key on the table
 
       kinesis_stream_mode     = "ON_DEMAND"
       kinesis_shard_count     = 1 # ignored in ON_DEMAND mode

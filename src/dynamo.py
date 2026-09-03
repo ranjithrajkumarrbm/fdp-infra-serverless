@@ -40,14 +40,17 @@ def _clean(item: dict) -> dict:
 def build_item(record: dict) -> dict:
     """Shape one decision record into a DynamoDB item.
 
-    ``record`` is expected to carry at least ``transaction_id``; the partition
-    (and optional sort) key attribute names are configurable via env so this
-    works against whatever schema ``fdp-*-transactions`` actually uses.
+    The destination table's key attribute names are configurable via env
+    (``TABLE_PARTITION_KEY`` / ``TABLE_SORT_KEY``) so this works against
+    whatever schema ``fdp-*-transactions`` actually uses. The partition key is
+    populated from the transaction id; the sort key, when the table has one,
+    from the account/customer id. Both are required and must be non-empty, so
+    fall back to ``"UNKNOWN"`` rather than let DynamoDB reject the batch.
     """
     item = dict(record)
-    item.setdefault(_PARTITION_KEY, record.get("transaction_id"))
+    item[_PARTITION_KEY] = record.get("transaction_id") or "UNKNOWN"
     if _SORT_KEY:
-        item.setdefault(_SORT_KEY, record.get(_SORT_KEY) or record.get("processed_at"))
+        item[_SORT_KEY] = record.get("account_id") or "UNKNOWN"
     return _clean(item)
 
 
